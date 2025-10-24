@@ -1,0 +1,47 @@
+worker_processes auto;
+events { worker_connections 1024; }
+
+http {
+  # Resolver público para resolver los hostnames de onrender
+  resolver 1.1.1.1 1.0.0.1 valid=300s ipv6=off;
+
+  # 50/50 por IP+request (puedes cambiar la semilla)
+  split_clients "${remote_addr}${request_method}${request_uri}" $backend_host {
+    50%     "siglad-proyecto.onrender.com";
+    *       "siglad-proyectoii.onrender.com";
+  }
+
+  # Host header correcto hacia cada origen
+  map $backend_host $host_hdr { default $backend_host; }
+
+  server {
+    listen 8080;
+
+    # Health local del balanceador
+    location = /_lb/health {
+      return 200 "ok\n";
+      add_header Content-Type text/plain;
+    }
+
+    location / {
+      proxy_pass https://$backend_host;
+
+      # Encabezados y TLS hacia el origen
+      proxy_set_header Host $host_hdr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header X-Forwarded-Host $host;
+
+      proxy_ssl_server_name on;          # SNI correcto
+      proxy_ssl_name $backend_host;
+
+      # Reintentos si el primero falla (red/códigos 5xx)
+      proxy_next_upstream error timeout http_500 http_502 http_503 http_504;
+      proxy_next_upstream_tries 2;
+
+      proxy_connect_timeout 5s;
+      proxy_read_timeout 30s;
+      proxy_send_timeout 30s;
+    }
+  }
+}

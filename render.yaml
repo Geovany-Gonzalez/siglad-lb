@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: siglad-lb
+    runtime: docker       # <- antes pusiste env: docker (no válido)
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /_lb/health
+    envVars:
+      - key: PORT
+        value: 8080      # puede ser número, no hace falta comillas
